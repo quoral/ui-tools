@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"go.einride.tech/sage/sg"
-	"go.einride.tech/sage/tools/sgbackstage"
 	"go.einride.tech/sage/tools/sgconvco"
 	"go.einride.tech/sage/tools/sggit"
 	"go.einride.tech/sage/tools/sggo"
@@ -25,7 +24,7 @@ func main() {
 }
 
 func Default(ctx context.Context) error {
-	sg.Deps(ctx, ConvcoCheck, BackstageValidate)
+	sg.Deps(ctx, ConvcoCheck)
 	sg.Deps(ctx, FormatMarkdown, FormatYaml)
 	sg.Deps(ctx, GoLint, GoReview)
 	sg.Deps(ctx, GoTest)
@@ -67,11 +66,6 @@ func FormatMarkdown(ctx context.Context) error {
 func FormatYaml(ctx context.Context) error {
 	sg.Logger(ctx).Println("formatting Yaml files...")
 	return sgyamlfmt.Run(ctx)
-}
-
-func BackstageValidate(ctx context.Context) error {
-	sg.Logger(ctx).Println("validating Backstage files...")
-	return sgbackstage.Validate(ctx)
 }
 
 func ConvcoCheck(ctx context.Context) error {

@@ -4,9 +4,12 @@ package main
 // component library.
 
 import (
+	"flag"
 	"fmt"
+	"io/fs"
 	"log"
-	"os/exec"
+	"os"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -14,7 +17,16 @@ import (
 )
 
 func main() {
-	p := tea.NewProgram(initialModel())
+	var notePath string
+	flag.StringVar(
+		&notePath,
+		"note-path",
+		"",
+		"path to note where one should append",
+	)
+	flag.Parse()
+
+	p := tea.NewProgram(initialModel(notePath))
 
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
@@ -30,45 +42,48 @@ func appendToObsidianNote(
 	content string,
 ) tea.Cmd {
 	return func() tea.Msg {
-		cmd := exec.Command(
-			"obsidian-cli",
-			"create",
+		b, err := os.ReadFile(note)
+		if err != nil {
+			return err
+		}
+		if b[len(b)-1] != '\n' {
+			content = "\n" + content
+		}
+		content := fmt.Sprintf("%s%s", string(b), content)
+		if err := os.WriteFile(
 			note,
-			"--append",
-			fmt.Sprintf(
-				"--content=%s",
-				content,
-			),
-		)
-		if err := cmd.Run(); err != nil {
+			[]byte(content),
+			fs.FileMode(os.O_TRUNC),
+		); err != nil {
 			return errMsg(err)
 		}
+
 		return executeDoneMsg{}
 	}
 }
 
 type model struct {
-	textArea   textarea.Model
-	textInput  textinput.Model
-	focusInput int
-	err        error
+	notePath  string
+	textArea  textarea.Model
+	textInput textinput.Model
+	err       error
 }
 
-func initialModel() model {
+func initialModel(notePath string) model {
 	ti := textinput.New()
 	ti.Placeholder = "Title"
 	ti.Focus()
-	ti.CharLimit = 50
-	ti.Width = 36
+	ti.Width = 80
 
 	ta := textarea.New()
 	ta.Placeholder = "Extra context/links"
-	ta.SetWidth(50)
+	ta.SetWidth(80)
 
 	return model{
 		textArea:  ta,
 		textInput: ti,
 		err:       nil,
+		notePath:  notePath,
 	}
 }
 
@@ -86,12 +101,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlQ:
+			val := m.textArea.Value()
+			val = strings.Trim(val, "\n ")
+			var lines []string
+			if val != "" {
+				lines = strings.Split(val, "\n")
+				for index := range lines {
+					lines[index] = fmt.Sprintf("\t- %s", lines[index])
+				}
+			}
 			contentString := fmt.Sprintf(
-				"\n- [ ] %s\n\t- %s",
+				"- [ ] %s\n%s",
 				m.textInput.Value(),
-				m.textArea.Value(),
+				strings.Join(lines, "\n"),
 			)
-			return m, appendToObsidianNote("Externals/Entry", contentString)
+			return m, appendToObsidianNote(m.notePath, contentString)
 		case tea.KeyCtrlC:
 			return m, tea.Quit
 		case tea.KeyTab:
